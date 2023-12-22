@@ -1,0 +1,13 @@
+name: sym_sim  
+channels:
+  - pytorch
+  - bioconda
+  - defaults
+  - conda-forge 
+dependencies:
+  - openai
+  - pronto=2.5.5
+  - tqdm
+  - boto
+  - pytorch==2.1.1+cu122
+  - lightning
