@@ -1,5 +1,7 @@
-# Semantic similarity between patient's HPOs and rare diseases' HPOs
+# LaRA: Large-language-model based semantic similarity for RAre disease
+Semantic similarity between patient's HPOs and rare diseases' HPOs
 
+![overview](data/images/LaRa.png)
 
 #### Embedding vector 구하기
 1. HPO definition에 대한 embedding vector 구하기
