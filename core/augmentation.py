@@ -15,6 +15,19 @@ from core.data_model import Patients, Patient, Diseases, Disease
 
 
 def cleanse_data(diseases, patients):
+    """
+    질병 데이터와 환자 데이터 중 쓸 수 없는 데이터를 아래의 기준으로 필터링
+
+    - 질병 데이터
+        - OMIM이 아닌(ORPHA)등의 id를 가진 증상을 하나라도 가질 경우 
+
+    - 환자 데이터
+        - 아래의 네가지 조건을 기준으로 필터링
+
+        - zero_symptom: 기록된 증상이 하나도 없는 경우
+        - too_many_symptom: 기록된 증상이 50개를 초과하는 경우 (가끔 매우 많이 들어오는 환자가 있어요)
+        - disease_id_missing: [HPO_VERSION = "v2023-10-09"]에서 포함되지 않는 증상이 있는 경우
+    """
     not_omim = lambda x: not x.id.startswith("OMIM")
     filtered_disease = []
     for d_data in diseases:
