@@ -26,7 +26,8 @@ def cleanse_data(diseases, patients):
 
         - zero_symptom: 기록된 증상이 하나도 없는 경우
         - too_many_symptom: 기록된 증상이 50개를 초과하는 경우 (가끔 매우 많이 들어오는 환자가 있어요)
-        - disease_id_missing: [HPO_VERSION = "v2023-10-09"]에서 포함되지 않는 증상이 있는 경우
+        - disease_id_missing: 기록된 진단 질병명이 없는 경우 
+        - not_in_hpo_db: [HPO_VERSION = "v2023-10-09"]에서 포함되지 않는 증상이 있는 경우
     """
     not_omim = lambda x: not x.id.startswith("OMIM")
     filtered_disease = []
