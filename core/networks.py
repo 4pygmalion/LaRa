@@ -1,3 +1,4 @@
+import itertools
 from typing import Any, Mapping, Tuple
 
 import torch
@@ -199,20 +200,24 @@ class Transformer(torch.nn.Module):
     def _is_iterable(self, obj):
         return hasattr(obj, '__iter__') and not isinstance(obj, str)
 
-    def get_score_from_pairs(self, patients, diseases, max_len=15):
+
+    def get_score_from_pairs(self, patients, diseases, max_len=15, cross=False):
         if not self._is_iterable(patients):
             patients = [patients]
         if not self._is_iterable(diseases):
             diseases = [diseases]
 
-        scores = []
-        for patient in patients:
-            for disease in diseases:
+        scores = {}
+        if cross:
+            for patient, disease in itertools.product(patients, diseases):
                 score = self._get_score_from_pair(patient, disease, max_len)
-                scores.append(score)
+                scores[(patient.id, disease.id)] = score
+        else:
+            for patient, disease in zip(patients, diseases):
+                score = self._get_score_from_pair(patient, disease, max_len)
+                scores[(patient.id, disease.id)] = score
 
         return scores
-        
 
 
     
