@@ -3,6 +3,10 @@ from typing import Any, Mapping, Tuple
 import torch
 import torch.nn as nn
 
+from .augmentation import (
+    TruncateOrPad,
+)
+
 
 
 def patch_attention(module):
@@ -176,3 +180,39 @@ class Transformer(torch.nn.Module):
             new_state_dict[new_key] = value
 
         return super().load_state_dict(new_state_dict, strict, assign)
+    
+    def _get_score_from_pair(self, patient, disease, max_len=15):
+        padder = TruncateOrPad(max_len, stochastic=False, weighted_sampling=True)
+        device = next(self.parameters()).device
+
+        def pad_input(x):
+            return padder(torch.tensor(x.hpos.vector, dtype=torch.float32, device=device), x)
+
+        with torch.no_grad():
+            input_src = pad_input(patient)
+            disease_tensor = pad_input(disease)
+            input_vector = self(input_src)
+            target_vector = self(disease_tensor)
+            score = torch.nn.functional.cosine_similarity(input_vector, target_vector).squeeze(-1).cpu().numpy()
+            return score
+
+    def _is_iterable(self, obj):
+        return hasattr(obj, '__iter__') and not isinstance(obj, str)
+
+    def get_score_from_pairs(self, patients, diseases, max_len=15):
+        if not self._is_iterable(patients):
+            patients = [patients]
+        if not self._is_iterable(diseases):
+            diseases = [diseases]
+
+        scores = []
+        for patient in patients:
+            for disease in diseases:
+                score = self._get_score_from_pair(patient, disease, max_len)
+                scores.append(score)
+
+        return scores
+        
+
+
+    
