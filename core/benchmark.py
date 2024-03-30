@@ -1,7 +1,7 @@
 import glob
 
 from .io_ops import read_json
-from .data_model import Patient, Patients, Ontology
+from .data_model import Patient, Patients, Ontology, Disease
 
 def load_phenopacket_patients(phenopacket_dir:str, ontology:Ontology) -> Patients:
     benchmark_patients_container = list()
@@ -22,7 +22,7 @@ def load_phenopacket_patients(phenopacket_dir:str, ontology:Ontology) -> Patient
         
     return Patients(benchmark_patients_container)
 
-def get_sym(patient, disease, similarity_matrix):
+def get_sym(patient, disease, similarity_matrix:dict):
     sum_sym = 0.
     sum_ic = 0.
     for p_sym in patient.hpos:
@@ -42,9 +42,9 @@ def get_sym(patient, disease, similarity_matrix):
     return sum_sym, sum_ic
 
 
-def get_pheno2disease(patient, disease):
-    sum_sym_p, sum_ic_p = get_sym(patient, disease)
-    sum_sym_d, sum_ic_d = get_sym(disease, patient)
+def get_phen2disease(patient:Patient, disease:Disease, similarity_matrix):
+    sum_sym_p, sum_ic_p = get_sym(patient, disease, similarity_matrix)
+    sum_sym_d, sum_ic_d = get_sym(disease, patient, similarity_matrix)
     sym_pd = (sum_sym_p+sum_sym_d) / (sum_ic_p + sum_ic_d)
 
     pheno2disease = sym_pd + (sum_sym_p/sum_ic_p)
