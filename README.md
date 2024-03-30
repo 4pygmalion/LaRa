@@ -59,3 +59,11 @@ True
 >>> patient_hpos["HP:0000005"]
 HPO(id='HP:0000005', name='Mode of inheritance', ...)
 ```
+
+
+### Dependency
+```
+$ git clone https://github.com/4pygmalion/SemanticSimilarity.git
+$ cd SemanticSimilarity
+$ pip install .
+```

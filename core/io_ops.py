@@ -9,7 +9,6 @@ def save_pickle(object, path: str) -> None:
 
     return
 
-
 def load_pickle(path: str) -> Any:
     with open(path, "rb") as fh:
         return pickle.load(fh)
