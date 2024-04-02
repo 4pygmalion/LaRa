@@ -5,7 +5,7 @@ from .data_model import Patient, Patients, Ontology, Disease
 
 def load_phenopacket_patients(phenopacket_dir:str, ontology:Ontology) -> Patients:
     benchmark_patients_container = list()
-    for path in glob.glob(f"{phenopacket_dir}/*"):
+    for path in sorted(glob.glob(f"{phenopacket_dir}/*")):
         p_data = read_json(path)
         
         patient_id = p_data["id"]
