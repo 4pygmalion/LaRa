@@ -11,10 +11,6 @@ import torch
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 
-# from lightning.pytorch.loggers import MLFlowLogger
-
-# from pytorch_lightning.callbacks import ModelCheckpoint
-# import pytorch_lightning as pl
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 sys.path.append(ROOT_DIR)
@@ -22,52 +18,31 @@ from core.networks import Transformer
 from core.io_ops import load_pickle
 from core.data_model import Patients, Diseases, Disease
 from core.datasets import (
-    collate_for_stochastic_pairwise_eval,
-    StochasticPairwiseDataset,
+    DiseaseSSLDataSet,
 )
+from core.transforms import TruncateOrPad
 from core.augmentation import (
-    cleanse_data,
     SampleSymptoms,
     AddNoiseSymptoms,
-    TruncateOrPad,
 )
 from core.trainer import TransformerModelPretrain
 from mlflow_settings import TRACKING_URI, EXP_SYMPTOM
 
 
-torch.set_float32_matmul_precision("medium")
+# torch.set_float32_matmul_precision("medium")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Semantic Similarity Experiment")
-
-    # mlflow run name
+    parser = argparse.ArgumentParser(description="LaRA Self-supervised learning")
     parser.add_argument("--run_name", type=str, default="debug", help="Run Name")
 
     # dataset parameter
-    parser.add_argument("--batch_size", type=int, default=128, help="Batch Size")
+    parser.add_argument("--batch_size", type=int, default=256, help="Batch Size")
     parser.add_argument(
         "--num_workers", type=int, default=16, help="num workers for dataloader"
     )
     parser.add_argument("--num_devices", type=int, default=4, help="Number of Devices")
-    parser.add_argument(
-        "--augmentation_factor", type=int, default=100, help="Augmentation Factor"
-    )
-    parser.add_argument("--max_len", type=int, default=15, help="Augmentation Factor")
-    parser.add_argument(
-        "--initial_fraction",
-        type=float,
-        default=0.75,
-        help="initial sampling fraction",
-    )
-    parser.add_argument(
-        "--fraction_decay_rate",
-        type=float,
-        default=1.0,
-        help="sampling fraction decay rate",
-    )
-
-    # model hyper params
+    parser.add_argument("--max_len", type=int, default=30, help="Number of HPOs in a item")
     parser.add_argument(
         "--input_size", type=int, default=1536, help="Input ecoded vector size by LLM."
     )
@@ -113,61 +88,48 @@ def parse_args():
     return parser.parse_args()
 
 
+def build_dataloader(omim_diseases, max_len, batch_size, num_workers, fraction) -> torch.utils.data.DataLoader:
+    """SSL용 데이터로더를 추가합니다."""
+    
+    sample_aug = SampleSymptoms(fraction)
+    dataset = DiseaseSSLDataSet(
+        omim_diseases,
+        augmentators=[
+            sample_aug,
+            AddNoiseSymptoms(omim_diseases.all_symptom_vectors)
+        ],
+        transforms=TruncateOrPad(max_len)
+    )
+        
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers
+    )
+    
+    
 if __name__ == "__main__":
     args = parse_args()
+
 
     diseases: Diseases = load_pickle(os.path.join(DATA_DIR, "diseases.pickle"))
     omim_diseases = Diseases(
         [disease for disease in diseases if disease.id.startswith("OMIM:")]
     )
     omim_diseases = omim_diseases[omim_diseases.all_disease_ids]
-
-    # all_symptom_vectors = torch.tensor(
-    #     disease_data.all_symptom_vectors, dtype=torch.float32
-    # )
-
-    # mlf_logger = MLFlowLogger(
-    #     experiment_name=EXP_SYMPTOM,
-    #     run_name=args.run_name,
-    #     tracking_uri=TRACKING_URI,
-    # )
-
-    # train_dataset = StochasticPairwiseDataset(
-    #     train_patients,
-    #     disease_data,
-    #     augmentation_factor=args.augmentation_factor,
-    #     max_len=args.max_len,
-    #     initial_fraction=args.initial_fraction,
-    #     fraction_decay_rate=args.fraction_decay_rate,
-    #     augmentator=[
-    #         SampleSymptoms(),
-    #         AddNoiseSymptoms(all_symptom_vectors),
-    #         TruncateOrPad(args.max_len, stochastic=True, weighted_sampling=False),
-    #     ],
-    # ).train()
-
-    # val_dataset = StochasticPairwiseDataset(
-    #     val_patients,
-    #     disease_data,
-    #     max_len=args.max_len,
-    # ).validate()
-
-    # train_dataloader = DataLoader(
-    #     train_dataset,
-    #     batch_size=args.batch_size,
-    #     shuffle=True,
-    #     num_workers=args.num_workers,
-    #     pin_memory=True,
-    # )
-
-    # val_dataloader = DataLoader(
-    #     val_dataset,
-    #     batch_size=args.batch_size,
-    #     num_workers=args.num_workers,
-    #     collate_fn=collate_for_stochastic_pairwise_eval,
-    #     pin_memory=True,
-    # )
-
+    
+    # DataLoader
+    loader_args = {
+        "batch_size": args.batch_size,
+        "num_workers": args.num_workers,
+        "max_len": args.max_len,
+        "fraction": args.fraction
+    }
+    train_dataloader = build_dataloader(omim_diseases, **loader_args)
+    val_dataloader = build_dataloader(omim_diseases, **loader_args)
+    test_dataloder = build_dataloader(omim_diseases, **loader_args)
+    
     # trainer = pl.Trainer(
     #     max_epochs=args.n_epoch,
     #     devices=args.num_devices,

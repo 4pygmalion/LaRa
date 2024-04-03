@@ -165,14 +165,3 @@ class Transformer(torch.nn.Module):
         with torch.no_grad():
             self(x)
         return save_output.outputs
-
-    def load_state_dict(
-        self, state_dict: Mapping[str, Any], strict: bool = True, assign: bool = False
-    ):
-        # rm prefix 'network.'
-        new_state_dict = {}
-        for key, value in state_dict.items():
-            new_key = key.replace("network.", "")
-            new_state_dict[new_key] = value
-
-        return super().load_state_dict(new_state_dict, strict, assign)

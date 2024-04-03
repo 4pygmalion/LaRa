@@ -23,13 +23,15 @@ class BaseAugmentation(ABC):
 
 
 class SampleSymptoms(BaseAugmentation):
-    def __call__(
-        self, symptom_seq: torch.Tensor, fraction: float = 0.75
-    ) -> torch.Tensor:
-        n = len(symptom_seq)
-        n_syms = np.clip(np.random.poisson(int(n * fraction)), 1, n)
+    
+    def __init__(self, fraction:float=0.75):
+        self.fraction = fraction
+        
+    def __call__(self, hpo_tensors: torch.Tensor) -> torch.Tensor:
+        n = len(hpo_tensors)
+        n_syms = np.clip(np.random.poisson(int(n * self.fraction)), 1, n)
         sample_idx = np.random.choice(range(n), size=n_syms, replace=False)
-        return symptom_seq[sample_idx]
+        return hpo_tensors[sample_idx]
 
 
 class AddNoiseSymptoms(BaseAugmentation):

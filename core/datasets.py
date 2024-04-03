@@ -10,8 +10,8 @@ from torch.utils.data import Dataset
 from .augmentation import (
     BaseAugmentation,
     AugmentationPipe,
-    TruncateOrPad,
 )
+from .transforms import TruncateOrPad
 from .data_model import Patients, Patient, Diseases, Disease, HPOs
 
 
