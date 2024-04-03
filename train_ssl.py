@@ -26,6 +26,9 @@ from core.augmentation import (
     AddNoiseSymptoms,
 )
 from core.trainer import TransformerModelPretrain
+from SimCLR.metrics import AverageMeter
+from SimCLR.datasets import SimCLRDataSet
+from SimCLR.trainer import SimCLRTrainer
 from mlflow_settings import TRACKING_URI, EXP_SYMPTOM
 
 
@@ -43,6 +46,7 @@ def parse_args():
     )
     parser.add_argument("--num_devices", type=int, default=4, help="Number of Devices")
     parser.add_argument("--max_len", type=int, default=30, help="Number of HPOs in a item")
+    parser.add_argument("--fraction", type=float, default=0.8, help="Sampling ratio")
     parser.add_argument(
         "--input_size", type=int, default=1536, help="Input ecoded vector size by LLM."
     )
