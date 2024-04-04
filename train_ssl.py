@@ -178,7 +178,7 @@ if __name__ == "__main__":
             if best_loss >= val_loss_meter.avg:
                 best_loss = val_loss_meter.avg
                 patience = 0
-                best_params:dict = copy.deepcopy(model.parameters())
+                best_params:dict = copy.deepcopy(model.state_dict())
                 continue
             
             if patience == args.max_patience:
