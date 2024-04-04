@@ -1,22 +1,24 @@
+"""
+$ python3 train_ssl.py \
+    --run_name warmup \
+    --batch_size 1024 
+"""
+
 import os
 import sys
-import warnings
+import math
+import copy
 import argparse
-
-# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-# warnings.filterwarnings("ignore", category=FutureWarning)
 
 import mlflow
 import torch
-from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 sys.path.append(ROOT_DIR)
 from core.networks import Transformer
 from core.io_ops import load_pickle
-from core.data_model import Patients, Diseases, Disease
+from core.data_model import  Diseases
 from core.datasets import (
     DiseaseSSLDataSet,
 )
@@ -25,15 +27,13 @@ from core.augmentation import (
     SampleSymptoms,
     AddNoiseSymptoms,
 )
-from core.trainer import TransformerModelPretrain
 from SimCLR.metrics import AverageMeter
-from SimCLR.datasets import SimCLRDataSet
 from SimCLR.trainer import SimCLRTrainer
-from mlflow_settings import TRACKING_URI, EXP_SYMPTOM
+from SimCLR.loss import SimCLRLoss
+from mlflow_settings import get_experiment
 
-
-# torch.set_float32_matmul_precision("medium")
-
+sys.setrecursionlimit(50000)
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LaRA Self-supervised learning")
@@ -70,7 +70,6 @@ def parse_args():
     )
 
     # optimizer params
-    # parser.add_argument("--learning_rate", type=float, default=3e-4, help="learning rate")
     parser.add_argument(
         "--val_interval",
         type=int,
@@ -78,6 +77,8 @@ def parse_args():
         help="validation after every val_interval epochs",
     )
     parser.add_argument("--n_epoch", type=int, default=100, help="# of epochs")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--max_patience", type=float, default=7, help="patience for early stopping")
     parser.add_argument("--weight_decay", type=float, default=1e-3, help="Weight Decay")
 
     # nce loss param
@@ -109,19 +110,18 @@ def build_dataloader(omim_diseases, max_len, batch_size, num_workers, fraction) 
         dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers
     )
     
     
 if __name__ == "__main__":
+    torch.multiprocessing.set_start_method('spawn')
+    
     args = parse_args()
-
-
+    
     diseases: Diseases = load_pickle(os.path.join(DATA_DIR, "diseases.pickle"))
     omim_diseases = Diseases(
         [disease for disease in diseases if disease.id.startswith("OMIM:")]
     )
-    omim_diseases = omim_diseases[omim_diseases.all_disease_ids]
     
     # DataLoader
     loader_args = {
@@ -134,41 +134,64 @@ if __name__ == "__main__":
     val_dataloader = build_dataloader(omim_diseases, **loader_args)
     test_dataloder = build_dataloader(omim_diseases, **loader_args)
     
-    # trainer = pl.Trainer(
-    #     max_epochs=args.n_epoch,
-    #     devices=args.num_devices,
-    #     accelerator="gpu",
-    #     strategy="ddp_find_unused_parameters_false",
-    #     check_val_every_n_epoch=args.val_interval,
-    #     num_sanity_val_steps=0,
-    #     logger=mlf_logger,
-    # )
+    model = Transformer(
+        input_size=args.input_size,
+        hidden_dim=args.hidden_dim,
+        output_size=args.output_size,
+        nhead=args.nhead,
+        n_layers=args.n_layers,
+    ).to("cuda")
+    loss = SimCLRLoss()
+    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    trainer = SimCLRTrainer(
+        torch.nn.DataParallel(model), 
+        loss, 
+        optimizer, 
+        device="cuda"
+    )
+    
+    
+    mlflow_exp = get_experiment()
+    
+    
+    best_params = dict()
+    patience = 0
+    best_loss = math.inf
+    with mlflow.start_run(experiment_id=mlflow_exp.experiment_id, run_name=args.run_name):
+        mlflow.log_artifact(os.path.abspath(__file__))
+        mlflow.log_params(vars(args))
+        
+        for epoch in range(1, args.n_epoch+1):
+            train_loss_meter:AverageMeter = trainer.run_epoch(
+                train_dataloader,
+                phase="train",
+                epoch=epoch
+            )
+            val_loss_meter:AverageMeter = trainer.run_epoch(
+                val_dataloader,
+                phase="val",
+                epoch=epoch,
+            )
+            
+            mlflow.log_metric("train_loss", train_loss_meter.avg, step=epoch)
+            mlflow.log_metric("val_loss", val_loss_meter.avg, step=epoch)
+            if best_loss >= val_loss_meter.avg:
+                best_loss = val_loss_meter.avg
+                patience = 0
+                best_params:dict = copy.deepcopy(model.parameters())
+                continue
+            
+            if patience == args.max_patience:
+                break
+            
+            patience += 1
 
-    # if trainer.is_global_zero:
-    #     mlf_logger.log_hyperparams(vars(args))
-
-    # # 0.3 × BatchSize/256
-    # lr = args.batch_size * 0.3 / 256
-
-    # model = TransformerModelPretrain(
-    #     input_size=args.input_size,
-    #     hidden_dim=args.hidden_dim,
-    #     output_size=args.output_size,
-    #     nhead=args.nhead,
-    #     lr=lr,
-    #     n_layers=args.n_layers,
-    #     temperature=args.temperature,
-    #     weight_decay=args.weight_decay,
-    #     ks=args.ks,
-    # )
-
-    # trainer.fit(
-    #     model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
-    # )
-
-    # if trainer.is_global_zero:
-    #     best_model = Transformer(**model.params)
-    #     best_model.load_state_dict(torch.load(model.best_model_path))
-
-    #     with mlflow.start_run(run_id=mlf_logger.run_id) as run:
-    #         mlflow.pytorch.log_model(best_model, "model")
+        model.load_state_dict(best_params)
+        test_loss_meter:AverageMeter = trainer.run_epoch(
+            test_dataloder,
+            phase="test",
+            epoch=0,
+        )
+        mlflow.pytorch.log_model(model, "model")
+            
+            

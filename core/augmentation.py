@@ -35,9 +35,8 @@ class SampleSymptoms(BaseAugmentation):
 
 
 class AddNoiseSymptoms(BaseAugmentation):
-    def __init__(self, all_symptom_vectors) -> None:
-        super().__init__()
-        self.all_symptom_vectors = all_symptom_vectors
+    def __init__(self, all_symptom_vectors:np.ndarray) -> None:
+        self.all_symptom_vectors = torch.from_numpy(all_symptom_vectors).float()
 
     def __call__(
         self,

@@ -40,10 +40,13 @@ class DiseaseSSLDataSet(torch.utils.data.Dataset):
         self.augmentators = augmentators
         self.transforms = transforms
         self.device = device
+        
+    def __len__(self)->int:
+        return len(self.diseases)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         disease: Disease = self.diseases[idx]
-        disease_hpos_tensor = torch.from_numpy(disease.hpos.vector)
+        disease_hpos_tensor = torch.from_numpy(disease.hpos.vector).float()
 
         aug_fun1, aug_fun2 = random.sample(self.augmentators, k=2)
         aug_hpos_vectors1: torch.Tensor = aug_fun1(disease_hpos_tensor)
@@ -51,7 +54,7 @@ class DiseaseSSLDataSet(torch.utils.data.Dataset):
         if not self.transforms:
             return aug_hpos_vectors1, aug_hpos_vectors2
 
-        return self.transforms(aug_hpos_vectors1), self.transforms(aug_hpos_vectors2)
+        return self.transforms(aug_hpos_vectors1).to(self.device), self.transforms(aug_hpos_vectors2).to(self.device)
 
 
 class ContrastiveDataset(Dataset):
