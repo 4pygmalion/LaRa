@@ -1,7 +1,7 @@
 """
 $ python3 train_ssl.py \
-    --run_name warmup \
-    --batch_size 1024 
+    --run_name testing \
+    --batch_size 128
 """
 
 import os
@@ -53,28 +53,20 @@ def parse_args():
     parser.add_argument(
         "--hidden_dim",
         type=int,
-        default=1024,
+        default=2048,
         help="Hidden dim for transformer encoder.",
     )
     parser.add_argument(
         "--output_size",
         type=int,
-        default=128,
+        default=512,
         help="Output dim of transformer encoder.",
     )
     parser.add_argument(
-        "--nhead", type=int, default=16, help="nhead for transformer encoder layer."
+        "--nhead", type=int, default=32, help="nhead for transformer encoder layer."
     )
     parser.add_argument(
-        "--n_layers", type=int, default=16, help="N layers for transformer encoder."
-    )
-
-    # optimizer params
-    parser.add_argument(
-        "--val_interval",
-        type=int,
-        default=10,
-        help="validation after every val_interval epochs",
+        "--n_layers", type=int, default=32, help="N layers for transformer encoder."
     )
     parser.add_argument("--n_epoch", type=int, default=100, help="# of epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
@@ -141,19 +133,17 @@ if __name__ == "__main__":
         nhead=args.nhead,
         n_layers=args.n_layers,
     ).to("cuda")
-    loss = SimCLRLoss()
+    
+    loss = SimCLRLoss(temperature=args.temperature)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
     trainer = SimCLRTrainer(
-        torch.nn.DataParallel(model), 
+        model, 
         loss, 
         optimizer, 
         device="cuda"
     )
     
-    
     mlflow_exp = get_experiment()
-    
-    
     best_params = dict()
     patience = 0
     best_loss = math.inf
