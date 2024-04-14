@@ -152,19 +152,21 @@ if __name__ == "__main__":
         mlflow.log_params(vars(args))
         
         for epoch in range(1, args.n_epoch+1):
-            train_loss_meter:AverageMeter = trainer.run_epoch(
+            train_loss_meter, train_metric_meter = trainer.run_epoch(
                 train_dataloader,
                 phase="train",
                 epoch=epoch
             )
-            val_loss_meter:AverageMeter = trainer.run_epoch(
+            val_loss_meter, val_metric_meter = trainer.run_epoch(
                 val_dataloader,
                 phase="val",
                 epoch=epoch,
             )
             
             mlflow.log_metric("train_loss", train_loss_meter.avg, step=epoch)
+            mlflow.log_metric("train_top_5", train_metric_meter.avg, step=epoch)
             mlflow.log_metric("val_loss", val_loss_meter.avg, step=epoch)
+            mlflow.log_metric("val_top_5", val_metric_meter.avg, step=epoch)
             if best_loss >= val_loss_meter.avg:
                 best_loss = val_loss_meter.avg
                 patience = 0
@@ -177,11 +179,13 @@ if __name__ == "__main__":
             patience += 1
 
         model.load_state_dict(best_params)
-        test_loss_meter:AverageMeter = trainer.run_epoch(
+        test_loss_meter, test_metric_meter = trainer.run_epoch(
             test_dataloder,
             phase="test",
             epoch=0,
         )
         mlflow.pytorch.log_model(model, "model")
+        mlflow.log_metric("test_loss", test_loss_meter.avg, step=epoch)
+        mlflow.log_metric("test_top_5", test_metric_meter.avg, step=epoch)
             
             
