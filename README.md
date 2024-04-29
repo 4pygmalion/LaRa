@@ -3,6 +3,10 @@ Semantic similarity between patient's HPOs and rare diseases' HPOs
 
 ![overview](data/images/LaRa.png)
 
+
+#### Install
+- TODO: SimCLR 설치하기
+
 #### Embedding vector 구하기
 1. HPO definition에 대한 embedding vector 구하기
 ```/bin/bash

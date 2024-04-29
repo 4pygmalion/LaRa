@@ -10,8 +10,8 @@ from torch.utils.data import Dataset
 from .augmentation import (
     BaseAugmentation,
     AugmentationPipe,
-    TruncateOrPad,
 )
+from .transforms import TruncateOrPad
 from .data_model import Patients, Patient, Diseases, Disease, HPOs
 
 
@@ -19,6 +19,42 @@ def collate_for_stochastic_pairwise_eval(x):
     sources, confirmed_diseases = tuple(zip(*x))
     sources = torch.stack(sources)
     return sources, confirmed_diseases
+
+
+class DiseaseSSLDataSet(torch.utils.data.Dataset):
+    """OMIM disease 기반 데이터 증강의 Dataset
+
+    Args:
+        augmentators (Callable): (N of HPO, embedding vertor)을 입력받아 np.ndarray에서
+            Tensor로 반환하는 callable
+    """
+
+    def __init__(
+        self,
+        diseases: Diseases,
+        augmentators: List[Callable],
+        transforms: Callable = None,
+        device: str = "cuda",
+    ):
+        self.diseases = diseases
+        self.augmentators = augmentators
+        self.transforms = transforms
+        self.device = device
+        
+    def __len__(self)->int:
+        return len(self.diseases)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        disease: Disease = self.diseases[idx]
+        disease_hpos_tensor = torch.from_numpy(disease.hpos.vector).float()
+
+        aug_fun1, aug_fun2 = random.sample(self.augmentators, k=2)
+        aug_hpos_vectors1: torch.Tensor = aug_fun1(disease_hpos_tensor)
+        aug_hpos_vectors2: torch.Tensor = aug_fun2(disease_hpos_tensor)
+        if not self.transforms:
+            return aug_hpos_vectors1, aug_hpos_vectors2
+
+        return self.transforms(aug_hpos_vectors1).to(self.device), self.transforms(aug_hpos_vectors2).to(self.device)
 
 
 class ContrastiveDataset(Dataset):
@@ -362,7 +398,8 @@ class StochasticPairwiseDataset(ContrastiveDataset):
         self._assign_all_disease_tensors()
         self.all_disease_ids = self.diseases.all_disease_ids
 
-    def _validate_augmentator(self):
+    def _validate_augmentator(self) -> None:
+        """Check passed augmentation to return torch.Tensor"""
         if self.augmentator is not None:
             for augmentator in self.augmentator:
                 augmentor_return_type = augmentator.__call__.__annotations__["return"]
@@ -371,6 +408,8 @@ class StochasticPairwiseDataset(ContrastiveDataset):
                         "Only support for return type of augmentator == 'torch.Tensor', "
                         f"passed {augmentor_return_type}"
                     )
+
+        return
 
     def train(self):
         """Switch to training mode."""

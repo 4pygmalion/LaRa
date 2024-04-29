@@ -1,0 +1,10 @@
+openai
+pronto==2.5.5
+tqdm
+boto
+pytorch
+lightning
+pytorch_lightning
+progress
+seaborn
+mlflow

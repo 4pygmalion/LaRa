@@ -1,3 +1,4 @@
+from abc import abstractmethod, ABC
 from typing import Any, Union, List
 
 import numpy as np
@@ -14,111 +15,28 @@ sys.path.append(ROOT_DIR)
 from core.data_model import Patients, Patient, Diseases, Disease
 
 
-def cleanse_data(diseases, patients):
-    not_omim = lambda x: not x.id.startswith("OMIM")
-    filtered_disease = []
-    for d_data in diseases:
-        conditions = [not_omim(d_data)]
-        if any(conditions):
-            # print(f"{d_data} filtered due to conditions: {conditions}")
-            continue
-        else:
-            filtered_disease.append(d_data)
-
-    diseases = Diseases(filtered_disease)
-    # remove duplication
-    diseases = diseases[diseases.all_disease_ids]
-
-    zero_symptom = lambda x: len(x.hpos) == 0
-    too_many_symptom = lambda x: len(x.hpos) > 50
-    disease_id_missing = lambda x: "-" in x.disease_ids
-    not_in_hpo_db = lambda x: any(
-        [id_ not in diseases.all_disease_ids for id_ in list(x.disease_ids)]
-    )
-
-    filtered_patients = []
-    for p_data in patients:
-        conditions = [
-            zero_symptom(p_data),
-            too_many_symptom(p_data),
-            disease_id_missing(p_data),
-            not_in_hpo_db(p_data),
-        ]
-        if any(conditions):
-            # print(f"{p_data} filtered due to conditions: {conditions}")
-            continue
-        else:
-            filtered_patients.append(p_data)
-
-    patients = Patients(filtered_patients)
-
-    return diseases, patients
-
-
-class BaseAugmentation:
+class BaseAugmentation(ABC):
+    @abstractmethod
     def __call__(self):
+        """Abstract method must be implemented"""
         pass
 
 
-class TruncateOrPad(BaseAugmentation):
-    def __init__(
-        self, max_len: int, stochastic: bool = True, weighted_sampling: bool = True
-    ) -> None:
-        super().__init__()
-        self.max_len = max_len
-        self.stochastic = stochastic
-        self.weighted_sampling = weighted_sampling
-
-    def __call__(
-        self,
-        symptom_seq: torch.Tensor,
-        symptom_set: Union[Patient, Disease] = None,
-    ) -> torch.Tensor:
-        if symptom_set is None and self.weighted_sampling:
-            if symptom_set is None:
-                raise ValueError(
-                    "Symptom set is missing, weight for sampling can not be calcalated!"
-                )
-
-        len_diff = self.max_len - len(symptom_seq)
-        if len_diff < 0:
-            if self.weighted_sampling:
-                p = np.array([hpo.depth for hpo in symptom_set.hpos])
-                p = p / p.sum()
-            else:
-                p = None
-            sample_idx = (
-                np.random.choice(
-                    range(len(symptom_seq)), size=self.max_len, replace=False, p=p
-                )
-                if self.stochastic
-                else np.argsort(p)[-self.max_len :]
-            )
-
-            symptom_seq = symptom_seq[sample_idx, :]
-
-        elif len_diff > 0:
-            symptom_seq = torch.nn.functional.pad(
-                symptom_seq, (0, 0, 0, len_diff), mode="constant", value=0
-            )
-
-        return symptom_seq
-
-
 class SampleSymptoms(BaseAugmentation):
-    def __call__(
-        self, symptom_seq: torch.Tensor, fraction: float = 0.75
-    ) -> torch.Tensor:
-        n = len(symptom_seq)
-        n_syms = np.clip(np.random.poisson(int(n * fraction)), 1, n)
-        sample_idx = np.random.choice(range(n), size=n_syms, replace=False)
-        return symptom_seq[sample_idx]
+    
+    def __init__(self, fraction:float=0.75):
+        self.fraction = fraction
+        
+    def __call__(self, hpo_tensors: torch.Tensor) -> torch.Tensor:
+        n = len(hpo_tensors)
+        n_syms = np.clip(np.random.poisson(int(n * self.fraction)), 1, n)
+        selected_idx = torch.randperm(n)[:n_syms]
+        return hpo_tensors[selected_idx]
 
 
 class AddNoiseSymptoms(BaseAugmentation):
-    def __init__(self, all_symptom_vectors) -> None:
-        super().__init__()
-        self.all_symptom_vectors = all_symptom_vectors
+    def __init__(self, all_symptom_vectors:np.ndarray) -> None:
+        self.all_symptom_vectors = torch.from_numpy(all_symptom_vectors).float()
 
     def __call__(
         self,
