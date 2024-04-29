@@ -1,7 +1,8 @@
 """
 $ python3 train_ssl.py \
     --run_name testing \
-    --batch_size 128
+    --batch_size 16 \
+    --device "cuda:3"
 """
 
 import os
@@ -33,7 +34,7 @@ from SimCLR.loss import SimCLRLoss
 from mlflow_settings import get_experiment
 
 sys.setrecursionlimit(50000)
-os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LaRA Self-supervised learning")
@@ -74,28 +75,30 @@ def parse_args():
     parser.add_argument("--weight_decay", type=float, default=1e-3, help="Weight Decay")
 
     # nce loss param
-    parser.add_argument("--temperature", type=float, default=0.07, help="Temperature")
+    parser.add_argument("--temperature", type=float, default=0.5, help="Temperature")
 
     # eval params
     parser.add_argument(
         "--ks", type=int, nargs="+", default=[1, 5, 10, 100], help="ks for topk metric"
     )
     parser.add_argument("--random_state", type=int, default=2023)
+    parser.add_argument("--device", help=str, default='cuda')
 
     return parser.parse_args()
 
 
-def build_dataloader(omim_diseases, max_len, batch_size, num_workers, fraction) -> torch.utils.data.DataLoader:
+def build_dataloader(omim_diseases, max_len, batch_size, num_workers, fraction, device) -> torch.utils.data.DataLoader:
     """SSL용 데이터로더를 추가합니다."""
-    
-    sample_aug = SampleSymptoms(fraction)
+                
     dataset = DiseaseSSLDataSet(
         omim_diseases,
         augmentators=[
-            sample_aug,
+            SampleSymptoms(fraction),
+            SampleSymptoms(fraction),
             AddNoiseSymptoms(omim_diseases.all_symptom_vectors)
         ],
-        transforms=TruncateOrPad(max_len)
+        transforms=TruncateOrPad(max_len),
+        device=device
     )
         
     return torch.utils.data.DataLoader(
@@ -120,7 +123,8 @@ if __name__ == "__main__":
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,
         "max_len": args.max_len,
-        "fraction": args.fraction
+        "fraction": args.fraction,
+        "device": args.device
     }
     train_dataloader = build_dataloader(omim_diseases, **loader_args)
     val_dataloader = build_dataloader(omim_diseases, **loader_args)
@@ -132,7 +136,7 @@ if __name__ == "__main__":
         output_size=args.output_size,
         nhead=args.nhead,
         n_layers=args.n_layers,
-    ).to("cuda")
+    ).to(args.device)
     
     loss = SimCLRLoss(temperature=args.temperature)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
@@ -140,7 +144,7 @@ if __name__ == "__main__":
         model, 
         loss, 
         optimizer, 
-        device="cuda"
+        device=args.device
     )
     
     mlflow_exp = get_experiment()

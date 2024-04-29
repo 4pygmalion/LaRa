@@ -30,8 +30,8 @@ class SampleSymptoms(BaseAugmentation):
     def __call__(self, hpo_tensors: torch.Tensor) -> torch.Tensor:
         n = len(hpo_tensors)
         n_syms = np.clip(np.random.poisson(int(n * self.fraction)), 1, n)
-        sample_idx = np.random.choice(range(n), size=n_syms, replace=False)
-        return hpo_tensors[sample_idx]
+        selected_idx = torch.randperm(n)[:n_syms]
+        return hpo_tensors[selected_idx]
 
 
 class AddNoiseSymptoms(BaseAugmentation):

@@ -100,7 +100,6 @@ class Transformer(torch.nn.Module):
         output_size,
         nhead,
         n_layers,
-        batch_first=True,
     ):
         """
         Transformer-based model with InfoNCE loss for representation learning.
@@ -136,30 +135,24 @@ class Transformer(torch.nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=nhead,
-            batch_first=batch_first,
+            batch_first=True,
             dim_feedforward=hidden_dim,
         )
-        self.batch_first = batch_first
-        self.tf_encode = nn.TransformerEncoder(encoder_layer, n_layers)
+        self.encoder = nn.TransformerEncoder(encoder_layer, n_layers)
         self.last_layer = nn.Sequential(nn.Linear(hidden_dim, output_size), nn.Tanh())
 
     def forward(self, x):
-        if x.ndim == 2:
-            x = x.unsqueeze(0)
-        # BxNxP
+        
+        # x: (B, N, D)
         x = self.inp_layer(x)
-        if ~self.batch_first:
-            x = x.permute(1, 0, 2)
-        x = self.tf_encode(x)
-        if ~self.batch_first:
-            x = x.permute(1, 0, 2)
+        x = self.encoder(x)
         x = self.last_layer(x)
-        # BxD
-        return x.mean(1)
+        
+        return x.mean(1) # BxD
     
     def get_att_weight(self, x):
         save_output = SaveOutput()
-        for module in self.tf_encode.layers:
+        for module in self.encoder.layers:
                 patch_attention(module.self_attn)
                 module.self_attn.register_forward_hook(save_output)
         with torch.no_grad():
