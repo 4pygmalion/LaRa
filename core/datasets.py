@@ -21,7 +21,7 @@ def collate_for_stochastic_pairwise_eval(x):
     return sources, confirmed_diseases
 
 
-class DiseaseSSLDataSet(torch.utils.data.Dataset):
+class DiseaseSSLDataSet(Dataset):
     """OMIM disease 기반 데이터 증강의 Dataset
 
     Args:
